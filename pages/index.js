@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { MainGrid } from '../src/components/MainGrid'
 import { Box } from '../src/components/Box'
 import { AlurakutMenu, AlurakutProfileSidebarMenuDefault, OrkutNostalgicIconSet } from '../src/lib/AluraCommons'
@@ -25,7 +25,7 @@ const ProfileRelationsBox = ({ title, data }) => {
         {title} ({data.length})
       </h2>
       <ul>
-        {data.map(({ id, title, url, image }) => (
+        {data.slice(0, 6).map(({ id, title, url, image }) => (
           <li key={id}>
             <a href={url}>
               <img src={image} />
@@ -85,6 +85,26 @@ export default function Home() {
     }
   ]
 
+  const [seguidores, setSeguidores] = useState([])
+  const getSeguidores = async () => {
+    await fetch(`https://api.github.com/users/${githubUser}/followers`)
+      .then(res => res.json())
+      .then(data => {
+        const mappedData = data.map(user => {
+          return {
+            id: user.id,
+            title: user.login,
+            url: user.html_url,
+            image: `https://github.com/${user.login}.png`
+          }
+        })
+        setSeguidores(mappedData)
+      })
+  }
+  useEffect(() => {
+    getSeguidores()
+  }, [])
+
   const handleSubmit = e => {
     e.preventDefault()
     const formData = new FormData(e.target)
@@ -135,6 +155,7 @@ export default function Home() {
           </Box>
         </div>
         <div className="profileRelationsArea" style={{ gridArea: 'profileRelationsArea' }}>
+          <ProfileRelationsBox title="Meus seguidores" data={seguidores} />
           <ProfileRelationsBox title="Pessoas da Comunidade" data={pessoasFavoritas} />
           <ProfileRelationsBox title="Comunidades" data={comunidades} />
         </div>
