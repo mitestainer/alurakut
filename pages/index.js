@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import nookies from 'nookies'
+import jwt from 'jsonwebtoken'
 import { MainGrid } from '../src/components/MainGrid'
 import { Box } from '../src/components/Box'
 import { AlurakutMenu, AlurakutProfileSidebarMenuDefault, OrkutNostalgicIconSet } from '../src/lib/AluraCommons'
@@ -38,14 +40,9 @@ const ProfileRelationsBox = ({ title, data }) => {
   )
 }
 
-export default function Home() {
-  const [comunidades, setComunidades] = useState([{
-    id: new Date().toISOString(),
-    title: 'Eu Odeio Acordar Cedo',
-    image: 'https://alurakut.vercel.app/capa-comunidade-01.jpg',
-    url: "#"
-  }])
-  const githubUser = 'mitestainer'
+export default function Home(props) {
+  const [comunidades, setComunidades] = useState([])
+  const githubUser = props.githubUser
   const pessoasFavoritas = [
     {
       id: 'juunegreiros',
@@ -101,19 +98,71 @@ export default function Home() {
         setSeguidores(mappedData)
       })
   }
+  const getDataFromDatoCMS = () => {
+    const token = 'b64c89fad42305a8f6a7270e75ba4c'
+    fetch('https://graphql.datocms.com/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: `query {
+          allCommunities {
+            id
+            title
+            imageUrl
+            creatorSlug
+          }
+        }`
+      })
+    }).then(res => res.json())
+      .then(({ data }) => {
+        const mappedData = data.allCommunities.map(community => {
+          return {
+            id: community.id,
+            title: community.title,
+            url: '#',
+            image: community.imageUrl
+          }
+        })
+        setComunidades(mappedData)
+      })
+      .catch((error) => {
+        console.log(error)
+      })
+  }
+
   useEffect(() => {
     getSeguidores()
+    getDataFromDatoCMS()
   }, [])
 
   const handleSubmit = e => {
     e.preventDefault()
     const formData = new FormData(e.target)
     const comunidade = {
-      id: new Date().toISOString(),
       title: formData.get('title'),
-      image: formData.get('image')
+      imageUrl: formData.get('image'),
+      creatorSlug: githubUser
     }
-    setComunidades([...comunidades, comunidade])
+    fetch('/api/comunidades', {
+      method: 'POST',
+      body: JSON.stringify(comunidade),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+      .then(async res => {
+        const dados = await res.json()
+        const novaComunidade = {
+          title: dados.registroCriado.title,
+          image: dados.registroCriado.imageUrl,
+          creatorSlug: dados.registroCriado.creatorSlug
+        }
+        setComunidades([...comunidades, novaComunidade])
+      })
   }
 
   return (
@@ -162,4 +211,32 @@ export default function Home() {
       </MainGrid>
     </>
   )
+}
+
+export async function getServerSideProps(context) {
+  const cookies = nookies.get(context)
+  const token = cookies.USER_TOKEN
+
+  const { isAuthenticated } = await fetch('https://alurakut.vercel.app/api/auth', {
+    headers: {
+      Authorization: token
+    }
+  }).then(res => res.json())
+
+  if (!isAuthenticated) {
+    return {
+      redirect: {
+        destination: '/login',
+        permanent: false
+      }
+    }
+  }
+
+  const { githubUser } = jwt.decode(token)
+
+  return {
+    props: {
+      githubUser
+    },
+  }
 }
